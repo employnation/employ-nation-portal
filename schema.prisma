@@ -1,0 +1,274 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   DateTime?
+  name            String?
+  image           String?
+  hashedPassword  String?
+  role            Role      @default(JOB_SEEKER)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  accounts        Account[]
+  sessions        Session[]
+  profile         Profile?
+  jobPosts        Job[]
+  applications    Application[]
+  sentMessages    Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  notifications   Notification[]
+  posts           Post[]
+  comments        Comment[]
+  likes           Like[]
+  
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
+
+// User Profile
+model Profile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  firstName       String?
+  lastName        String?
+  phone           String?
+  location        String?
+  bio             String?
+  website         String?
+  linkedin        String?
+  github          String?
+  portfolio       String?
+  resumeUrl       String?
+  skills          String?   // JSON string for skills array
+  experience      String?   // JSON string for experience data
+  education       String?   // JSON string for education data
+  availability    String?   // "AVAILABLE", "NOT_AVAILABLE", "OPEN_TO_OPPORTUNITIES"
+  salaryRange     String?
+  preferredJobType String?  // JSON string for job types: ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE"]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+// Job Management
+model Job {
+  id              String      @id @default(cuid())
+  title           String
+  description     String
+  requirements    String?
+  location        String
+  jobType         JobType
+  workMode        WorkMode    // REMOTE, ONSITE, HYBRID
+  salaryMin       Int?
+  salaryMax       Int?
+  currency        String      @default("USD")
+  company         String
+  companyLogo     String?
+  companyWebsite  String?
+  skills          String?     // JSON string for required skills
+  benefits        String?     // JSON string for job benefits
+  isActive        Boolean     @default(true)
+  isFeatured      Boolean     @default(false)
+  expiresAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  userId          String      // Job poster
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id])
+  applications Application[]
+  
+  @@map("jobs")
+}
+
+model Application {
+  id          String            @id @default(cuid())
+  jobId       String
+  userId      String
+  coverLetter String?
+  resumeUrl   String?
+  status      ApplicationStatus @default(PENDING)
+  appliedAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@map("applications")
+}
+
+// Social Features
+model Post {
+  id        String    @id @default(cuid())
+  content   String
+  imageUrl  String?
+  userId    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  likes    Like[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Like {
+  id     String @id @default(cuid())
+  postId String
+  userId String
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("likes")
+}
+
+// Messaging System
+model Message {
+  id         String   @id @default(cuid())
+  content    String
+  senderId   String
+  receiverId String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// Notification System
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  actionUrl String?
+  createdAt DateTime         @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// Enums
+enum Role {
+  JOB_SEEKER
+  EMPLOYER
+  ADMIN
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  FREELANCE
+  INTERNSHIP
+}
+
+enum WorkMode {
+  REMOTE
+  ONSITE
+  HYBRID
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWED
+  SHORTLISTED
+  INTERVIEWED
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationType {
+  JOB_APPLICATION
+  MESSAGE
+  JOB_POST
+  PROFILE_UPDATE
+  SYSTEM
+}
